@@ -22,8 +22,10 @@ android/local.properties
 *.apk
 *.aab
 
-# Signing key
+# Signing keys (local dev: `make release-keystore`)
 tailscale.jks
+tailscale-release.jks
+tailscale-release.password
 
 # android sdk dir
 ./android-sdk

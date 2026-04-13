@@ -2,8 +2,13 @@
 # Use of this source code is governed by a BSD-style
 # license that can be found in the LICENSE file.
 
-## For signed release build JKS_PASSWORD must be set to the password for the jks keystore
-## and JKS_PATH must be set to the path to the jks keystore.
+## Local signed builds default to tailscale-release.jks + tailscale-release.password (gitignored).
+## Run `make release-keystore` once to generate an RSA-4096 keystore, or set JKS_PATH and
+## JKS_PASSWORD yourself (e.g. production).
+##
+## Signed release APKs: `make release-apk` / `make release-tv-apk`.
+## Gradle signing is gated on TAILSCALE_GRADLE_RELEASE_SIGN=1 so `make release` (AAB + jarsigner)
+## stays valid when JKS_* is exported in your shell.
 
 # The docker image to use for the build environment.  Changing this
 # will force a rebuild of the docker image.  If there is an existing image
@@ -23,6 +28,14 @@ GOMOBILE_BUILD_TAGS := ts_omit_cachenetmap
 DEBUG_APK := tailscale-debug.apk
 RELEASE_AAB := tailscale-release.aab
 RELEASE_TV_AAB := tailscale-tv-release.aab
+RELEASE_APK := tailscale-release.apk
+RELEASE_TV_APK := tailscale-tv-release.apk
+
+# Local dev keystore (see `release-keystore` target).
+RELEASE_KEYSTORE := $(abspath $(CURDIR)/tailscale-release.jks)
+RELEASE_KEYSTORE_PASSWORD_FILE := $(abspath $(CURDIR)/tailscale-release.password)
+JKS_PATH ?= $(RELEASE_KEYSTORE)
+export JKS_PATH
 
 # Define output filenames.
 LIBTAILSCALE_AAR := android/libs/libtailscale.aar
@@ -130,15 +143,59 @@ $(DEBUG_APK): libtailscale debug-symbols version gradle-dependencies build-unstr
 	(cd android && ./gradlew test assembleDebug)
 	install -C android/build/outputs/apk/debug/android-debug.apk $@
 
+# Creates tailscale-release.jks (RSA-4096) and tailscale-release.password (gitignored).
+.PHONY: release-keystore
+release-keystore:
+	@if [ -f "$(RELEASE_KEYSTORE)" ]; then \
+		echo "error: $(RELEASE_KEYSTORE) already exists; remove it to regenerate"; exit 1; \
+	fi
+	@command -v openssl >/dev/null || (echo "error: openssl not found"; exit 1)
+	@KEYTOOL="$(JAVA_HOME)/bin/keytool"; \
+	if [ -z "$(JAVA_HOME)" ] || [ ! -x "$$KEYTOOL" ]; then KEYTOOL=$$(command -v keytool); fi; \
+	if [ -z "$$KEYTOOL" ] || [ ! -x "$$KEYTOOL" ]; then \
+		echo "error: keytool not found (set JAVA_HOME to a JDK)"; exit 1; \
+	fi; \
+	PASS=$$(openssl rand -hex 32); \
+	printf '%s' "$$PASS" > "$(RELEASE_KEYSTORE_PASSWORD_FILE)" && chmod 600 "$(RELEASE_KEYSTORE_PASSWORD_FILE)"; \
+	"$$KEYTOOL" -genkeypair -v \
+		-keystore "$(RELEASE_KEYSTORE)" \
+		-alias tailscale \
+		-keyalg RSA -keysize 4096 \
+		-validity 10000 \
+		-storepass "$$PASS" \
+		-keypass "$$PASS" \
+		-dname "CN=Tailscale Android Local Dev, OU=Dev, O=Local, C=US"; \
+	echo "Created $(RELEASE_KEYSTORE) and $(RELEASE_KEYSTORE_PASSWORD_FILE)"
+
+# Ensures JKS_PATH exists; auto-runs release-keystore only for the default local path.
+.PHONY: ensure-release-keystore
+ensure-release-keystore:
+	@if [ -f "$(JKS_PATH)" ]; then exit 0; fi; \
+	if [ "$(JKS_PATH)" != "$(RELEASE_KEYSTORE)" ]; then \
+		echo "error: JKS_PATH does not exist: $(JKS_PATH)"; exit 1; \
+	fi; \
+	echo "No keystore at $(JKS_PATH); running release-keystore..."; \
+	$(MAKE) release-keystore
+
 # Builds the release AAB and signs it (phone/tablet/chromeOS variant)
 .PHONY: release
-release: jarsign-env $(RELEASE_AAB)
-	@jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore $(JKS_PATH) -storepass $(JKS_PASSWORD) $(RELEASE_AAB) tailscale
+release: ensure-release-keystore jarsign-env $(RELEASE_AAB)
+	@set -e; \
+	PASS_RESOLVED="$(JKS_PASSWORD)"; \
+	if [ -z "$$PASS_RESOLVED" ] && [ -f "$(RELEASE_KEYSTORE_PASSWORD_FILE)" ]; then \
+		PASS_RESOLVED=$$(cat "$(RELEASE_KEYSTORE_PASSWORD_FILE)"); \
+	fi; \
+	jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore "$(JKS_PATH)" -storepass "$$PASS_RESOLVED" $(RELEASE_AAB) tailscale
 
 # Builds the release AAB and signs it (androidTV variant)
 .PHONY: release-tv
-release-tv: jarsign-env $(RELEASE_TV_AAB)
-	@jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore $(JKS_PATH) -storepass $(JKS_PASSWORD) $(RELEASE_TV_AAB) tailscale
+release-tv: ensure-release-keystore jarsign-env $(RELEASE_TV_AAB)
+	@set -e; \
+	PASS_RESOLVED="$(JKS_PASSWORD)"; \
+	if [ -z "$$PASS_RESOLVED" ] && [ -f "$(RELEASE_KEYSTORE_PASSWORD_FILE)" ]; then \
+		PASS_RESOLVED=$$(cat "$(RELEASE_KEYSTORE_PASSWORD_FILE)"); \
+	fi; \
+	jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore "$(JKS_PATH)" -storepass "$$PASS_RESOLVED" $(RELEASE_TV_AAB) tailscale
 
 # gradle-dependencies groups together the android sources and libtailscale needed to assemble tests/debug/release builds.
 .PHONY: gradle-dependencies
@@ -153,6 +210,38 @@ $(RELEASE_TV_AAB): version gradle-dependencies
 	@echo "Building TV release AAB"
 	(cd android && ./gradlew test bundleRelease_tv)
 	install -C ./android/build/outputs/bundle/release_tv/android-release_tv.aab $@
+
+# Signed release APK (phone/tablet/ChromeOS). Uses Gradle signing; see android/build.gradle.
+.PHONY: release-apk
+release-apk: $(RELEASE_APK)
+
+$(RELEASE_APK): ensure-release-keystore jarsign-env version gradle-dependencies
+	@echo "Building signed release APK"
+	@set -e; \
+	PASS_RESOLVED="$(JKS_PASSWORD)"; \
+	if [ -z "$$PASS_RESOLVED" ] && [ -f "$(RELEASE_KEYSTORE_PASSWORD_FILE)" ]; then \
+		PASS_RESOLVED=$$(cat "$(RELEASE_KEYSTORE_PASSWORD_FILE)"); \
+	fi; \
+	(cd android && \
+		TAILSCALE_GRADLE_RELEASE_SIGN=1 JKS_PATH="$(JKS_PATH)" JKS_PASSWORD="$$PASS_RESOLVED" \
+		./gradlew test assembleRelease)
+	install -C ./android/build/outputs/apk/release/android-release.apk $@
+
+# Signed release APK (Android TV variant).
+.PHONY: release-tv-apk
+release-tv-apk: $(RELEASE_TV_APK)
+
+$(RELEASE_TV_APK): ensure-release-keystore jarsign-env version gradle-dependencies
+	@echo "Building signed TV release APK"
+	@set -e; \
+	PASS_RESOLVED="$(JKS_PASSWORD)"; \
+	if [ -z "$$PASS_RESOLVED" ] && [ -f "$(RELEASE_KEYSTORE_PASSWORD_FILE)" ]; then \
+		PASS_RESOLVED=$$(cat "$(RELEASE_KEYSTORE_PASSWORD_FILE)"); \
+	fi; \
+	(cd android && \
+		TAILSCALE_GRADLE_RELEASE_SIGN=1 JKS_PATH="$(JKS_PATH)" JKS_PASSWORD="$$PASS_RESOLVED" \
+		./gradlew test assembleRelease_tv)
+	install -C ./android/build/outputs/apk/release_tv/android-release_tv.apk $@
 
 tailscale-test.apk: version gradle-dependencies
 	(cd android && ./gradlew assembleApplicationTestAndroidTest)
@@ -249,20 +338,26 @@ env:
 	@echo "TOOLCHAINDIR=$(TOOLCHAINDIR)"
 	@echo "AVD_IMAGE=$(AVD_IMAGE)"
 
-# Ensure that JKS_PATH and JKS_PASSWORD are set before we attempt a build
-# that requires signing.
+# Ensure signing inputs exist before a build that requires signing.
+# Password: JKS_PASSWORD (make/env) or first run: tailscale-release.password from release-keystore.
 .PHONY: jarsign-env
 jarsign-env:
-ifeq ($(JKS_PATH),)
-	$(error JKS_PATH is not set.  export JKS_PATH=/path/to/tailcale.jks)
-endif
-ifeq ($(JKS_PASSWORD),)
-	$(error JKS_PASSWORD is not set.  export JKS_PASSWORD=passwordForTailcale.jks)
-endif
-ifeq ($(wildcard $(JKS_PATH)),)
-	$(error JKS_PATH does not point to a file)
-endif
-	@echo "keystore path set to $(JKS_PATH)"
+	@set -e; \
+	if [ -z "$(JKS_PATH)" ]; then \
+		echo "error: JKS_PATH is not set"; exit 1; \
+	fi; \
+	if [ ! -f "$(JKS_PATH)" ]; then \
+		echo "error: JKS_PATH does not point to a file: $(JKS_PATH)"; exit 1; \
+	fi; \
+	PASS_RESOLVED="$(JKS_PASSWORD)"; \
+	if [ -z "$$PASS_RESOLVED" ] && [ -f "$(RELEASE_KEYSTORE_PASSWORD_FILE)" ]; then \
+		PASS_RESOLVED=$$(cat "$(RELEASE_KEYSTORE_PASSWORD_FILE)"); \
+	fi; \
+	if [ -z "$$PASS_RESOLVED" ]; then \
+		echo "error: JKS_PASSWORD is not set and $(RELEASE_KEYSTORE_PASSWORD_FILE) missing (run: make release-keystore)"; \
+		exit 1; \
+	fi; \
+	echo "keystore path set to $(JKS_PATH)"
 
 .PHONY: androidpath
 androidpath:
@@ -406,7 +501,7 @@ docker-remove-shell-image: ## Removes all docker shell image
 .PHONY: clean
 clean: ## Remove build artifacts. Does not purge docker build envs. Use dockerRemoveEnv for that.
 	@echo "Cleaning up old build artifacts"
-	-rm -rf android/build $(DEBUG_APK) $(RELEASE_AAB) $(RELEASE_TV_AAB) $(LIBTAILSCALE_AAR) android/libs *.apk *.aab
+	-rm -rf android/build $(DEBUG_APK) $(RELEASE_AAB) $(RELEASE_TV_AAB) $(RELEASE_APK) $(RELEASE_TV_APK) $(LIBTAILSCALE_AAR) android/libs *.apk *.aab
 	@echo "Cleaning cached toolchain"
 	-rm -rf $(HOME)/.cache/tailscale-go{,.extracted}
 	-pkill -f gradle

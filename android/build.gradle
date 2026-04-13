@@ -31,6 +31,34 @@ apply plugin: 'com.android.application'
 apply plugin: 'org.jetbrains.kotlin.plugin.serialization'
 apply plugin: 'com.ncorti.ktfmt.gradle'
 
+// Gradle release signing (APK/AAB). Requires TAILSCALE_GRADLE_RELEASE_SIGN=1 so that
+// `make release` (unsigned AAB + jarsigner) is unchanged when JKS_* is set in the shell.
+// Optional: JKS_KEY_ALIAS (default tailscale), JKS_KEY_PASSWORD (defaults to keystore password).
+def gradleReleaseSignFlag = System.getenv("TAILSCALE_GRADLE_RELEASE_SIGN")
+def gradleReleaseSigningEnabled = gradleReleaseSignFlag != null &&
+        !gradleReleaseSignFlag.isEmpty() &&
+        !gradleReleaseSignFlag.equalsIgnoreCase("0") &&
+        !gradleReleaseSignFlag.equalsIgnoreCase("false")
+
+def releaseStorePath = System.getenv("JKS_PATH") ?: ""
+def releaseStorePassword = System.getenv("JKS_PASSWORD") ?: ""
+
+def releaseSigningConfigured = gradleReleaseSigningEnabled &&
+        !releaseStorePath.isEmpty() &&
+        !releaseStorePassword.isEmpty()
+
+def releaseKeyAlias = {
+    def v = System.getenv("JKS_KEY_ALIAS")
+    if (v != null && !v.isEmpty()) return v
+    return "tailscale"
+}()
+
+def releaseKeyPassword = {
+    def v = System.getenv("JKS_KEY_PASSWORD")
+    if (v != null && !v.isEmpty()) return v
+    return releaseStorePassword
+}()
+
 android {
     ndkVersion "23.1.7779620"
     compileSdkVersion 34
@@ -76,6 +104,17 @@ android {
     flavorDimensions "version"
     namespace 'com.tailscale.ipn'
 
+    if (releaseSigningConfigured) {
+        signingConfigs {
+            release {
+                storeFile file(releaseStorePath)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         applicationTest {
             initWith debug
@@ -97,6 +136,10 @@ android {
             proguardFiles getDefaultProguardFile(
                     'proguard-android-optimize.txt'),
                     'proguard-rules.pro'
+
+            if (releaseSigningConfigured) {
+                signingConfig signingConfigs.release
+            }
         }
         release_tv {
             initWith release
