@@ -3,7 +3,9 @@
 
 package com.tailscale.ipn.ui.view
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
@@ -118,16 +120,25 @@ fun ExitNodePicker(
 fun ExitNodeItem(
     viewModel: ExitNodePickerViewModel,
     node: ExitNodePickerViewModel.ExitNode,
+    onLongClick: (() -> Unit)? = null,
 ) {
   val online by node.online.collectAsState()
   val isRunningExitNode = viewModel.isRunningExitNode.collectAsState().value
   val forcedExitNodeId = MDMSettings.exitNodeID.flow.collectAsState().value.value
+  val canSelect = online && !isRunningExitNode && forcedExitNodeId == null
 
   Box {
-    var modifier: Modifier = Modifier
-    if (online && !isRunningExitNode && forcedExitNodeId == null) {
-      modifier = modifier.clickable { viewModel.setExitNode(node) }
-    }
+    val modifier =
+        when {
+          onLongClick != null -> {
+            exitNodeItemLongClickModifier(
+                canSelect = canSelect,
+                onClick = { viewModel.setExitNode(node) },
+                onLongClick = onLongClick)
+          }
+          canSelect -> Modifier.clickable { viewModel.setExitNode(node) }
+          else -> Modifier
+        }
     ListItem(
         modifier = modifier,
         colors =
@@ -147,6 +158,20 @@ fun ExitNodeItem(
             }
           }
         })
+  }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun exitNodeItemLongClickModifier(
+    canSelect: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+): Modifier {
+  return if (canSelect) {
+    Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+  } else {
+    Modifier.combinedClickable(onClick = {}, onLongClick = onLongClick)
   }
 }
 

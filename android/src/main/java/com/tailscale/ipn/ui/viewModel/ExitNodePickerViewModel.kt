@@ -53,6 +53,8 @@ class ExitNodePickerViewModel(private val nav: ExitNodePickerNav) : IpnViewModel
   val tailnetExitNodes: StateFlow<List<ExitNode>> = MutableStateFlow(emptyList())
   val mullvadExitNodesByCountryCode: StateFlow<Map<String, List<ExitNode>>> =
       MutableStateFlow(TreeMap())
+  val mullvadExitNodesByCountryAndCity: StateFlow<Map<String, Map<String, List<ExitNode>>>> =
+      MutableStateFlow(TreeMap())
   val mullvadBestAvailableByCountry: StateFlow<Map<String, ExitNode>> = MutableStateFlow(TreeMap())
   val mullvadExitNodeCount: StateFlow<Int> = MutableStateFlow(0)
   val anyActive: StateFlow<Boolean> = MutableStateFlow(false)
@@ -92,6 +94,18 @@ class ExitNodePickerViewModel(private val nav: ExitNodePickerNav) : IpnViewModel
                     val online = node.online.value
                     node.mullvad && (node.selected || online)
                   }
+              val allMullvadExitNodesByCountryAndCity =
+                  allMullvadExitNodes
+                      .groupBy { it.countryCode }
+                      .mapValues { (_, nodes) ->
+                        nodes
+                            .groupBy { it.city }
+                            .mapValues { (_, cityNodes) ->
+                              cityNodes.sortedWith(::compareMullvadExitNodes)
+                            }
+                      }
+              mullvadExitNodesByCountryAndCity.set(allMullvadExitNodesByCountryAndCity)
+
               val mullvadExitNodes =
                   allMullvadExitNodes
                       .groupBy {
@@ -106,15 +120,7 @@ class ExitNodePickerViewModel(private val nav: ExitNodePickerNav) : IpnViewModel
                               // Pick one node per city, either the selected one or the best
                               // available
                               nodes
-                                  .sortedWith { a, b ->
-                                    if (a.selected && !b.selected) {
-                                      -1
-                                    } else if (b.selected && !a.selected) {
-                                      1
-                                    } else {
-                                      b.priority.compareTo(a.priority)
-                                    }
-                                  }
+                                  .sortedWith(::compareMullvadExitNodes)
                                   .first()
                             }
                             .values
@@ -172,3 +178,20 @@ val List<ExitNodePickerViewModel.ExitNode>.selected
 
 val Map<String, List<ExitNodePickerViewModel.ExitNode>>.selected
   get() = this.any { it.value.selected }
+
+private fun compareMullvadExitNodes(
+    a: ExitNodePickerViewModel.ExitNode,
+    b: ExitNodePickerViewModel.ExitNode,
+): Int {
+  if (a.selected && !b.selected) {
+    return -1
+  }
+  if (b.selected && !a.selected) {
+    return 1
+  }
+  val priorityCompare = b.priority.compareTo(a.priority)
+  if (priorityCompare != 0) {
+    return priorityCompare
+  }
+  return a.label.compareTo(b.label, ignoreCase = true)
+}

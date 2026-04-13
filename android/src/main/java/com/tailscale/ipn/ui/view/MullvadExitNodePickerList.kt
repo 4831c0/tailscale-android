@@ -3,7 +3,8 @@
 
 package com.tailscale.ipn.ui.view
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,9 +19,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.tailscale.ipn.mdm.MDMSettings
 import com.tailscale.ipn.R
 import com.tailscale.ipn.ui.util.LoadingIndicator
 import com.tailscale.ipn.ui.util.flag
@@ -30,7 +35,7 @@ import com.tailscale.ipn.ui.viewModel.ExitNodePickerViewModel
 import com.tailscale.ipn.ui.viewModel.ExitNodePickerViewModelFactory
 import com.tailscale.ipn.ui.viewModel.selected
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun MullvadExitNodePickerList(
     nav: ExitNodePickerNav,
@@ -42,6 +47,16 @@ fun MullvadExitNodePickerList(
           Header(R.string.choose_mullvad_exit_node, onBack = nav.onNavigateBackToExitNodes)
         }) { innerPadding ->
           val mullvadExitNodes by model.mullvadExitNodesByCountryCode.collectAsState()
+          val mullvadExitNodesByCountryAndCity by
+              model.mullvadExitNodesByCountryAndCity.collectAsState()
+          val isRunningExitNode by model.isRunningExitNode.collectAsState()
+          val forcedExitNodeId = MDMSettings.exitNodeID.flow.collectAsState().value.value
+          val canSelectServers = !isRunningExitNode && forcedExitNodeId == null
+          val chooseServerText = stringResource(R.string.choose_mullvad_server)
+          var pickerTitle by remember { mutableStateOf("") }
+          var pickerNodes by remember {
+            mutableStateOf<List<ExitNodePickerViewModel.ExitNode>>(emptyList())
+          }
 
           LazyColumn(modifier = Modifier.padding(innerPadding)) {
             val sortedCountries =
@@ -58,13 +73,26 @@ fun MullvadExitNodePickerList(
               Box {
                 ListItem(
                     modifier =
-                        Modifier.clickable {
-                          if (nodes.size > 1) {
-                            nav.onNavigateToMullvadCountry(countryCode)
-                          } else {
-                            model.setExitNode(first)
-                          }
-                        },
+                        Modifier.combinedClickable(
+                            onClick = {
+                              if (nodes.size > 1) {
+                                nav.onNavigateToMullvadCountry(countryCode)
+                              } else {
+                                model.setExitNode(first)
+                              }
+                            },
+                            onLongClick = {
+                              val servers =
+                                  mullvadExitNodesByCountryAndCity[countryCode]
+                                      ?.entries
+                                      ?.sortedBy { it.key.lowercase() }
+                                      ?.flatMap { it.value }
+                                      .orEmpty()
+                              if (servers.isNotEmpty()) {
+                                pickerTitle = "${countryCode.flag()} ${first.country} - $chooseServerText"
+                                pickerNodes = servers
+                              }
+                            }),
                     leadingContent = {
                       Text(
                           countryCode.flag(),
@@ -91,6 +119,15 @@ fun MullvadExitNodePickerList(
                     })
               }
             }
+          }
+          if (pickerNodes.isNotEmpty()) {
+            MullvadExitNodeServerPickerSheet(
+                title = pickerTitle,
+                servers = pickerNodes,
+                canSelectServers = canSelectServers,
+                showCityInSubtitle = true,
+                viewModel = model,
+                onDismiss = { pickerNodes = emptyList() })
           }
         }
   }
