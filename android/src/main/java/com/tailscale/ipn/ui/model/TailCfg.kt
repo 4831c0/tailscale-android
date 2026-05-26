@@ -105,11 +105,12 @@ class Tailcfg {
     val isExitNode: Boolean =
         (AllowedIPs?.contains("0.0.0.0/0") ?: false) && (AllowedIPs?.contains("::/0") ?: false)
 
-    // mullvad nodes are exit nodes with a mullvad.ts.net domain *or* Location Info.
-    // These checks are intentionally redundant to avoid false negatives.
+    // Mullvad exit nodes: partnership *.mullvad, legacy *.mullvad.ts.net, or Location info.
     val isMullvadNode: Boolean
       get() =
-          Name.endsWith(".mullvad.ts.net") ||
+          Name.endsWith(".mullvad.") ||
+              Name.endsWith(".mullvad.ts.net") ||
+              ComputedName?.endsWith(".mullvad.") == true ||
               ComputedName?.endsWith(".mullvad.ts.net") == true ||
               Hostinfo.Location != null
 

@@ -88,6 +88,11 @@ fun ExitNodePicker(
 
         itemsWithDividers(tailnetExitNodes, key = { it.id!! }) { node -> ExitNodeItem(model, node) }
 
+        item(key = "mullvad_account") {
+          Lists.SectionDivider()
+          MullvadAccountItem(nav)
+        }
+
         if (mullvadExitNodeCount > 0) {
           item(key = "mullvad") {
             Lists.SectionDivider()
@@ -172,6 +177,24 @@ private fun exitNodeItemLongClickModifier(
     Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
   } else {
     Modifier.combinedClickable(onClick = {}, onLongClick = onLongClick)
+  }
+}
+
+@Composable
+fun MullvadAccountItem(nav: ExitNodePickerNav) {
+  Box {
+    ListItem(
+        modifier = Modifier.clickable { nav.onNavigateToMullvadAccount() },
+        headlineContent = {
+          Text(
+              stringResource(R.string.mullvad_use_your_account),
+              style = MaterialTheme.typography.bodyMedium)
+        },
+        supportingContent = {
+          Text(
+              stringResource(R.string.mullvad_settings_title),
+              style = MaterialTheme.typography.bodyMedium)
+        })
   }
 }
 

@@ -26,6 +26,7 @@ data class ExitNodePickerNav(
     val onNavigateToMullvadInfo: () -> Unit,
     val onNavigateBackToMullvad: () -> Unit,
     val onNavigateToMullvadCountry: (String) -> Unit,
+    val onNavigateToMullvadAccount: () -> Unit,
     val onNavigateToRunAsExitNode: () -> Unit,
 )
 
@@ -77,7 +78,8 @@ class ExitNodePickerViewModel(private val nav: ExitNodePickerNav) : IpnViewModel
                             label = it.displayName,
                             online = MutableStateFlow(it.Online ?: false),
                             selected = it.StableID == exitNodeId,
-                            mullvad = it.Name.endsWith(".mullvad.ts.net."),
+                            mullvad = it.Name.endsWith(".mullvad.") ||
+                                it.Name.endsWith(".mullvad.ts.net."),
                             priority = it.Hostinfo.Location?.Priority ?: 0,
                             countryCode = it.Hostinfo.Location?.CountryCode ?: "",
                             country = it.Hostinfo.Location?.Country ?: "",

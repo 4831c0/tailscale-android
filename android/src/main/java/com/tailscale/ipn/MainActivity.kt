@@ -50,6 +50,7 @@ import androidx.core.net.toUri
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -77,9 +78,12 @@ import com.tailscale.ipn.ui.view.MDMSettingsDebugView
 import com.tailscale.ipn.ui.view.MainView
 import com.tailscale.ipn.ui.view.MainViewNavigation
 import com.tailscale.ipn.ui.view.ManagedByView
+import com.tailscale.ipn.ui.view.MullvadClientLocationPicker
+import com.tailscale.ipn.ui.view.MullvadClientLocationPickerList
 import com.tailscale.ipn.ui.view.MullvadExitNodePicker
 import com.tailscale.ipn.ui.view.MullvadExitNodePickerList
 import com.tailscale.ipn.ui.view.MullvadInfoView
+import com.tailscale.ipn.ui.view.MullvadSettingsView
 import com.tailscale.ipn.ui.view.NotificationsView
 import com.tailscale.ipn.ui.view.PeerDetails
 import com.tailscale.ipn.ui.view.PermissionsView
@@ -96,6 +100,8 @@ import com.tailscale.ipn.ui.view.UserSwitcherNav
 import com.tailscale.ipn.ui.view.UserSwitcherView
 import com.tailscale.ipn.ui.viewModel.AppViewModel
 import com.tailscale.ipn.ui.viewModel.ExitNodePickerNav
+import com.tailscale.ipn.ui.viewModel.MullvadNav
+import com.tailscale.ipn.ui.viewModel.MullvadViewModel
 import com.tailscale.ipn.ui.viewModel.MainViewModel
 import com.tailscale.ipn.ui.viewModel.MainViewModelFactory
 import com.tailscale.ipn.ui.viewModel.PermissionsViewModel
@@ -322,7 +328,21 @@ class MainActivity : ComponentActivity() {
                           onNavigateToMullvadInfo = { navController.navigate("mullvad_info") },
                           onNavigateBackToMullvad = backTo("mullvad"),
                           onNavigateToMullvadCountry = { navController.navigate("mullvad/$it") },
+                          onNavigateToMullvadAccount = {
+                            navController.navigate("mullvad_account")
+                          },
                           onNavigateToRunAsExitNode = { navController.navigate("runExitNode") })
+                  val mullvadNav =
+                      MullvadNav(
+                          onNavigateBackToExitNodes = backTo("exitNodes"),
+                          onNavigateToClientLocation = {
+                            navController.navigate("mullvad_client_location")
+                          },
+                          onNavigateBackToAccount = backTo("mullvad_account"),
+                          onNavigateToClientCountry = {
+                            navController.navigate("mullvad_client_location/$it")
+                          },
+                      )
                   val userSwitcherNav =
                       UserSwitcherNav(
                           backToSettings = backTo("settings"),
@@ -354,6 +374,28 @@ class MainActivity : ComponentActivity() {
                   composable("health") { HealthView(backTo("main")) }
                   composable("mullvad") { MullvadExitNodePickerList(exitNodePickerNav) }
                   composable("mullvad_info") { MullvadInfoView(exitNodePickerNav) }
+                  composable("mullvad_account") { entry ->
+                    val model: MullvadViewModel = viewModel(entry)
+                    MullvadSettingsView(mullvadNav, model)
+                  }
+                  composable("mullvad_client_location") { entry ->
+                    val parentEntry =
+                        remember(entry) { navController.getBackStackEntry("mullvad_account") }
+                    MullvadClientLocationPickerList(mullvadNav, parentEntry)
+                  }
+                  composable(
+                      "mullvad_client_location/{countryCode}",
+                      arguments =
+                          listOf(navArgument("countryCode") { type = NavType.StringType })) {
+                        entry ->
+                      val parentEntry =
+                          remember(entry) { navController.getBackStackEntry("mullvad_account") }
+                      MullvadClientLocationPicker(
+                          entry.arguments!!.getString("countryCode")!!,
+                          mullvadNav,
+                          parentEntry,
+                      )
+                    }
                   composable(
                       "mullvad/{countryCode}",
                       arguments =

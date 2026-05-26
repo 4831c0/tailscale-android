@@ -87,15 +87,32 @@ $(info Using STRIP_TOOL: $(STRIP_TOOL))
 
 # Attempt to find Android Studio for Linux configuration, which does not have a
 # predetermined location.
-ANDROID_STUDIO_ROOT ?= $(shell find ~/android-studio /usr/local/android-studio /opt/android-studio /Applications/Android\ Studio.app $(PROGRAMFILES)/Android/Android\ Studio -type d -maxdepth 1 2>/dev/null | head -n 1)
+ANDROID_STUDIO_ROOT ?= $(shell find \
+	"$(HOME)/.local/share/JetBrains/Toolbox/apps/android-studio" \
+	"$(HOME)/android-studio" /usr/local/android-studio /opt/android-studio \
+	/Applications/Android\ Studio.app \
+	"$(PROGRAMFILES)/Android/Android Studio" \
+	-type d -maxdepth 1 2>/dev/null | head -n 1)
 
-# Set JAVA_HOME to the Android Studio bundled JDK.
-export JAVA_HOME ?= $(shell find "$(ANDROID_STUDIO_ROOT)/jbr" "$(ANDROID_STUDIO_ROOT)/jre" "$(ANDROID_STUDIO_ROOT)/Contents/jbr/Contents/Home" "$(ANDROID_STUDIO_ROOT)/Contents/jre/Contents/Home" -maxdepth 1 -type d 2>/dev/null | head -n 1)
+# Prefer Android Studio's bundled JBR for Gradle/gomobile. System JDKs (e.g.
+# java-26-openjdk) break AGP's androidJdkImage/jlink transform.
+AS_JBR := $(shell find \
+	"$(HOME)/.local/share/JetBrains/Toolbox/apps/android-studio/jbr" \
+	"$(ANDROID_STUDIO_ROOT)/jbr" "$(ANDROID_STUDIO_ROOT)/jre" \
+	"$(ANDROID_STUDIO_ROOT)/Contents/jbr/Contents/Home" \
+	"$(ANDROID_STUDIO_ROOT)/Contents/jre/Contents/Home" \
+	-maxdepth 1 -type d 2>/dev/null | head -n 1)
+ifneq ($(AS_JBR),)
+    export JAVA_HOME := $(AS_JBR)
+else
+    export JAVA_HOME ?= $(AS_JBR)
+endif
 ifeq ($(JAVA_HOME),)
     unexport JAVA_HOME
 else
     export PATH := $(JAVA_HOME)/bin:$(PATH)
 endif
+$(info Using JAVA_HOME: $(JAVA_HOME))
 
 AVD_BASE_IMAGE := "system-images;android-33;google_apis;"
 export HOST_ARCH := $(shell uname -m)

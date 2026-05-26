@@ -152,6 +152,24 @@
 
     <!-- Strings for ExitNode picker -->
     <string name="choose_exit_node">Choose exit node</string>
+    <string name="mullvad_settings_title">Mullvad VPN</string>
+    <string name="mullvad_account_number">Account number</string>
+    <string name="mullvad_login">Log in</string>
+    <string name="mullvad_logout">Log out</string>
+    <string name="mullvad_connect">Connect exit</string>
+    <string name="mullvad_disconnect">Disconnect exit</string>
+    <string name="mullvad_use_your_account">Use your Mullvad account</string>
+    <string name="mullvad_location">Exit location</string>
+    <string name="mullvad_location_default">Automatic (best available)</string>
+    <string name="mullvad_choose_location">Choose Mullvad location</string>
+    <string name="mullvad_obfuscation">Obfuscation</string>
+    <string name="mullvad_multihop">Multihop</string>
+    <string name="mullvad_lockdown">Lockdown mode</string>
+    <string name="mullvad_advanced_stubbed">Advanced (limited on Android)</string>
+    <string name="servers">servers</string>
+    <string name="mullvad_quantum_resistance">Quantum-resistant tunnel</string>
+    <string name="mullvad_daita">DAITA</string>
+    <string name="mullvad_feature_unavailable">Not available on this device yet</string>
     <string name="choose_mullvad_exit_node">Mullvad exit nodes</string>
     <string name="choose_mullvad_server">Choose Mullvad server</string>
     <string name="mullvad_exit_nodes" translatable="false">Mullvad VPN</string>
