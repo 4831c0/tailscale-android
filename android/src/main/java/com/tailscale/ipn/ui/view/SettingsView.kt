@@ -145,6 +145,12 @@ fun SettingsView(
           }
 
           Lists.SectionDivider()
+          Setting.Text(
+              R.string.mullvad_settings_title,
+              subtitle = stringResource(R.string.mullvad_use_your_account),
+              onClick = settingsNav.onNavigateToMullvadSettings)
+
+          Lists.SectionDivider()
           Setting.Text(R.string.bug_report, onClick = settingsNav.onNavigateToBugReport)
 
           Lists.ItemDivider()
@@ -278,5 +284,5 @@ fun SettingsPreview() {
   vm.tailNetLockEnabled.set(true)
   vm.isAdmin.set(true)
   vm.managedByOrganization.set("Tails and Scales Inc.")
-  SettingsView(SettingsNav({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}), vm)
+  SettingsView(SettingsNav({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}), vm)
 }

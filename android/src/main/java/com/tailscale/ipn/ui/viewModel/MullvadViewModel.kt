@@ -25,6 +25,8 @@ data class MullvadStatusJson(
     val location: String = "",
     val city: String = "",
     val relayHostname: String = "",
+    val deviceName: String = "",
+    val wgPublicKey: String = "",
 )
 
 @Serializable
@@ -94,6 +96,12 @@ class MullvadViewModel : ViewModel() {
   private val _relays = MutableStateFlow<List<RelayCountryJson>>(emptyList())
   val relays: StateFlow<List<RelayCountryJson>> = _relays
 
+  private val _deviceName = MutableStateFlow("")
+  val deviceName: StateFlow<String> = _deviceName
+
+  private val _wgPublicKey = MutableStateFlow("")
+  val wgPublicKey: StateFlow<String> = _wgPublicKey
+
   private val _loading = MutableStateFlow(false)
   val loading: StateFlow<Boolean> = _loading
 
@@ -132,8 +140,12 @@ class MullvadViewModel : ViewModel() {
             val st = json.decodeFromString<MullvadStatusJson>(body)
             _loggedIn.value = st.loggedIn
             _wantTunnel.value = st.wantTunnel
+            _deviceName.value = st.deviceName
+            _wgPublicKey.value = st.wgPublicKey
             val lines = mutableListOf<String>()
             if (st.account.isNotEmpty()) lines += "Account: ${redactAccount(st.account)}"
+            if (st.deviceName.isNotEmpty()) lines += "Device: ${st.deviceName}"
+            if (st.wgPublicKey.isNotEmpty()) lines += "WG key: ${st.wgPublicKey}"
             if (st.tunnelState.isNotEmpty()) lines += "Tunnel: ${st.tunnelState}"
             if (st.location.isNotEmpty()) {
               val loc = buildString {

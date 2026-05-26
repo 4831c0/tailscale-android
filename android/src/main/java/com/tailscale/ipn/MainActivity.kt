@@ -316,6 +316,9 @@ class MainActivity : ComponentActivity() {
                           onNavigateToManagedBy = { navController.navigate("managedBy") },
                           onNavigateToUserSwitcher = { navController.navigate("userSwitcher") },
                           onNavigateToPermissions = { navController.navigate("permissions") },
+                          onNavigateToMullvadSettings = {
+                            navController.navigate("settingsMullvad")
+                          },
                           onBackToSettings = backTo("settings"),
                           onNavigateBackHome = backTo("main"))
                   val exitNodePickerNav =
@@ -341,6 +344,17 @@ class MainActivity : ComponentActivity() {
                           onNavigateBackToAccount = backTo("mullvad_account"),
                           onNavigateToClientCountry = {
                             navController.navigate("mullvad_client_location/$it")
+                          },
+                      )
+                  val settingsMullvadNav =
+                      MullvadNav(
+                          onNavigateBackToExitNodes = backTo("settings"),
+                          onNavigateToClientLocation = {
+                            navController.navigate("settingsMullvadLocation")
+                          },
+                          onNavigateBackToAccount = backTo("settingsMullvad"),
+                          onNavigateToClientCountry = {
+                            navController.navigate("settingsMullvadLocation/$it")
                           },
                       )
                   val userSwitcherNav =
@@ -403,6 +417,28 @@ class MainActivity : ComponentActivity() {
                         MullvadExitNodePicker(
                             it.arguments!!.getString("countryCode")!!, exitNodePickerNav)
                       }
+                  composable("settingsMullvad") { entry ->
+                    val model: MullvadViewModel = viewModel(entry)
+                    MullvadSettingsView(settingsMullvadNav, model)
+                  }
+                  composable("settingsMullvadLocation") { entry ->
+                    val parentEntry =
+                        remember(entry) { navController.getBackStackEntry("settingsMullvad") }
+                    MullvadClientLocationPickerList(settingsMullvadNav, parentEntry)
+                  }
+                  composable(
+                      "settingsMullvadLocation/{countryCode}",
+                      arguments =
+                          listOf(navArgument("countryCode") { type = NavType.StringType })) {
+                        entry ->
+                      val parentEntry =
+                          remember(entry) { navController.getBackStackEntry("settingsMullvad") }
+                      MullvadClientLocationPicker(
+                          entry.arguments!!.getString("countryCode")!!,
+                          settingsMullvadNav,
+                          parentEntry,
+                      )
+                    }
                   composable("runExitNode") { RunExitNodeView(exitNodePickerNav) }
                   composable(
                       "peerDetails/{nodeId}",
