@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tailscale.ipn.App
 import com.tailscale.ipn.ui.util.InputStreamAdapter
+import com.tailscale.ipn.ui.util.flag
 import java.io.ByteArrayInputStream
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -105,11 +106,42 @@ class MullvadViewModel : ViewModel() {
   private val _loading = MutableStateFlow(false)
   val loading: StateFlow<Boolean> = _loading
 
+  private val _tunnelState = MutableStateFlow("")
+  val tunnelState: StateFlow<String> = _tunnelState
+
+  private val _statusLocation = MutableStateFlow("")
+  val statusLocation: StateFlow<String> = _statusLocation
+
+  private val _statusCity = MutableStateFlow("")
+  val statusCity: StateFlow<String> = _statusCity
+
+  private val _statusRelayHostname = MutableStateFlow("")
+  val statusRelayHostname: StateFlow<String> = _statusRelayHostname
+
+  val isMullvadActive: Boolean
+    get() = _wantTunnel.value && _tunnelState.value == "connected"
+
+  fun mullvadExitNodeLabel(): String {
+    val loc = _statusLocation.value
+    val city = _statusCity.value
+    val relay = _statusRelayHostname.value
+    if (loc.isEmpty()) return ""
+    val countryName =
+        _relays.value.find { it.code.equals(loc, ignoreCase = true) }?.name ?: loc.uppercase()
+    val serverId = relay.substringAfterLast("-", "")
+    val flag = loc.flag()
+    return buildString {
+      append("$flag $countryName/$city")
+      if (serverId.isNotEmpty()) append(" ($serverId)")
+    }
+  }
+
   private val obfuscationModes =
       listOf("auto", "off", "udp2tcp", "shadowsocks", "wireguard_port", "quic", "lwo")
 
   init {
     refresh()
+    fetchRelays()
   }
 
   fun capabilityLevel(feature: String): Int = _capabilities.value[feature] ?: 2
@@ -142,6 +174,10 @@ class MullvadViewModel : ViewModel() {
             _wantTunnel.value = st.wantTunnel
             _deviceName.value = st.deviceName
             _wgPublicKey.value = st.wgPublicKey
+            _tunnelState.value = st.tunnelState
+            _statusLocation.value = st.location
+            _statusCity.value = st.city
+            _statusRelayHostname.value = st.relayHostname
             val lines = mutableListOf<String>()
             if (st.account.isNotEmpty()) lines += "Account: ${redactAccount(st.account)}"
             if (st.deviceName.isNotEmpty()) lines += "Device: ${st.deviceName}"

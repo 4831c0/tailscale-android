@@ -76,6 +76,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.tailscale.ipn.App
 import com.tailscale.ipn.R
@@ -111,6 +112,7 @@ import com.tailscale.ipn.ui.util.set
 import com.tailscale.ipn.ui.viewModel.AppViewModel
 import com.tailscale.ipn.ui.viewModel.IpnViewModel.NodeState
 import com.tailscale.ipn.ui.viewModel.MainViewModel
+import com.tailscale.ipn.ui.viewModel.MullvadViewModel
 import com.tailscale.ipn.util.FeatureFlags
 import kotlinx.coroutines.flow.emptyFlow
 
@@ -293,12 +295,21 @@ fun ExitNodeStatus(navAction: () -> Unit, viewModel: MainViewModel) {
   // don't have an active node.
   val chosenExitNodeId = prefs.activeExitNodeID ?: prefs.selectedExitNodeID
   val exitNodePeer = chosenExitNodeId?.let { id -> netmap?.Peers?.find { it.StableID == id } }
-  val name = exitNodePeer?.exitNodeName
+  val peerName = exitNodePeer?.exitNodeName
+
+  val mullvadVm: MullvadViewModel = viewModel()
+  val mullvadTunnelState by mullvadVm.tunnelState.collectAsState()
+  val mullvadWantTunnel by mullvadVm.wantTunnel.collectAsState()
+  val mullvadActive = mullvadWantTunnel && mullvadTunnelState == "connected"
+  val name = peerName ?: if (mullvadActive) mullvadVm.mullvadExitNodeLabel() else null
+  val effectiveNodeState =
+      if (nodeState == NodeState.NONE && mullvadActive) NodeState.ACTIVE_AND_RUNNING else nodeState
+
   val managedByOrganization by viewModel.managedByOrganization.collectAsState()
   Box(
       modifier =
           Modifier.fillMaxWidth().background(color = MaterialTheme.colorScheme.surfaceContainer)) {
-        if (nodeState == NodeState.OFFLINE_MDM) {
+        if (effectiveNodeState == NodeState.OFFLINE_MDM) {
           Box(
               modifier =
                   Modifier.padding(start = 16.dp, end = 16.dp, top = 56.dp, bottom = 16.dp)
@@ -327,7 +338,7 @@ fun ExitNodeStatus(navAction: () -> Unit, viewModel: MainViewModel) {
               ListItem(
                   modifier = Modifier.clickable { navAction() },
                   colors =
-                      when (nodeState) {
+                      when (effectiveNodeState) {
                         NodeState.ACTIVE_AND_RUNNING -> MaterialTheme.colorScheme.primaryListItem
                         NodeState.ACTIVE_NOT_RUNNING -> MaterialTheme.colorScheme.listItem
                         NodeState.RUNNING_AS_EXIT_NODE -> MaterialTheme.colorScheme.warningListItem
@@ -341,9 +352,9 @@ fun ExitNodeStatus(navAction: () -> Unit, viewModel: MainViewModel) {
                   overlineContent = {
                     Text(
                         text =
-                            if (nodeState == NodeState.OFFLINE_ENABLED ||
-                                nodeState == NodeState.OFFLINE_DISABLED ||
-                                nodeState == NodeState.OFFLINE_MDM)
+                            if (effectiveNodeState == NodeState.OFFLINE_ENABLED ||
+                                effectiveNodeState == NodeState.OFFLINE_DISABLED ||
+                                effectiveNodeState == NodeState.OFFLINE_MDM)
                                 stringResource(R.string.exit_node_offline)
                             else stringResource(R.string.exit_node),
                         style = MaterialTheme.typography.bodySmall,
@@ -353,7 +364,7 @@ fun ExitNodeStatus(navAction: () -> Unit, viewModel: MainViewModel) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                       Text(
                           text =
-                              when (nodeState) {
+                              when (effectiveNodeState) {
                                 NodeState.NONE -> stringResource(id = R.string.none)
                                 NodeState.RUNNING_AS_EXIT_NODE ->
                                     stringResource(id = R.string.running_exit_node)
@@ -366,17 +377,17 @@ fun ExitNodeStatus(navAction: () -> Unit, viewModel: MainViewModel) {
                           imageVector = Icons.Outlined.ArrowDropDown,
                           contentDescription = null,
                           tint =
-                              if (nodeState == NodeState.NONE)
+                              if (effectiveNodeState == NodeState.NONE)
                                   MaterialTheme.colorScheme.onSurfaceVariant
                               else MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f),
                       )
                     }
                   },
                   trailingContent = {
-                    if (nodeState != NodeState.NONE) {
+                    if (effectiveNodeState != NodeState.NONE) {
                       Button(
                           colors =
-                              when (nodeState) {
+                              when (effectiveNodeState) {
                                 NodeState.OFFLINE_ENABLED -> MaterialTheme.colorScheme.errorButton
                                 NodeState.OFFLINE_DISABLED -> MaterialTheme.colorScheme.errorButton
                                 NodeState.OFFLINE_MDM -> MaterialTheme.colorScheme.errorButton
@@ -387,12 +398,12 @@ fun ExitNodeStatus(navAction: () -> Unit, viewModel: MainViewModel) {
                                 else -> MaterialTheme.colorScheme.secondaryButton
                               },
                           onClick = {
-                            if (nodeState == NodeState.RUNNING_AS_EXIT_NODE)
+                            if (effectiveNodeState == NodeState.RUNNING_AS_EXIT_NODE)
                                 viewModel.setRunningExitNode(false)
                             else viewModel.toggleExitNode()
                           }) {
                             Text(
-                                when (nodeState) {
+                                when (effectiveNodeState) {
                                   NodeState.OFFLINE_DISABLED -> stringResource(id = R.string.enable)
                                   NodeState.ACTIVE_NOT_RUNNING ->
                                       stringResource(id = R.string.enable)

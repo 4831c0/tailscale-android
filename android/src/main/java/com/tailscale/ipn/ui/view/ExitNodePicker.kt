@@ -36,6 +36,7 @@ import com.tailscale.ipn.ui.util.itemsWithDividers
 import com.tailscale.ipn.ui.viewModel.ExitNodePickerNav
 import com.tailscale.ipn.ui.viewModel.ExitNodePickerViewModel
 import com.tailscale.ipn.ui.viewModel.ExitNodePickerViewModelFactory
+import com.tailscale.ipn.ui.viewModel.MullvadViewModel
 import com.tailscale.ipn.ui.viewModel.selected
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -52,6 +53,11 @@ fun ExitNodePicker(
       val mullvadExitNodeCount by model.mullvadExitNodeCount.collectAsState()
       val anyActive by model.anyActive.collectAsState()
       val shouldShowMullvadInfo by model.shouldShowMullvadInfo.collectAsState()
+
+      val mullvadVm: MullvadViewModel = viewModel()
+      val mullvadTunnelState by mullvadVm.tunnelState.collectAsState()
+      val mullvadWantTunnel by mullvadVm.wantTunnel.collectAsState()
+      val mullvadBYOActive = mullvadWantTunnel && mullvadTunnelState == "connected"
       val allowLANAccess = Notifier.prefs.collectAsState().value?.ExitNodeAllowLANAccess == true
       val showRunAsExitNode by MDMSettings.runExitNode.flow.collectAsState()
       val allowLanAccessMDMDisposition by MDMSettings.exitNodeAllowLANAccess.flow.collectAsState()
@@ -75,7 +81,7 @@ fun ExitNodePicker(
                 ExitNodePickerViewModel.ExitNode(
                     label = stringResource(R.string.none),
                     online = MutableStateFlow(true),
-                    selected = !anyActive,
+                    selected = !anyActive && !mullvadBYOActive,
                 ))
           }
           if (showRunAsExitNode.value == ShowHide.Show) {
@@ -97,7 +103,9 @@ fun ExitNodePicker(
           item(key = "mullvad") {
             Lists.SectionDivider()
             MullvadItem(
-                nav, mullvadExitNodesByCountryCode.size, mullvadExitNodesByCountryCode.selected)
+                nav,
+                mullvadExitNodesByCountryCode.size,
+                mullvadExitNodesByCountryCode.selected || mullvadBYOActive)
           }
         } else if (shouldShowMullvadInfo) {
           item(key = "mullvad_info") {
