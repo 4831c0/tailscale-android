@@ -35,9 +35,7 @@ fun MullvadSettingsView(nav: MullvadNav, model: MullvadViewModel) {
   val statusText by model.statusText.collectAsState()
   val settings by model.settings.collectAsState()
   val loading by model.loading.collectAsState()
-  val capabilities by model.capabilities.collectAsState()
   var account by remember { mutableStateOf("") }
-  val obfsModes = remember(capabilities) { model.implementedObfuscationModes() }
 
   LoadingIndicator.Wrap {
     Scaffold(topBar = { Header(R.string.mullvad_settings_title, onBack = nav.onNavigateBackToExitNodes) }) {
@@ -83,6 +81,35 @@ fun MullvadSettingsView(nav: MullvadNav, model: MullvadViewModel) {
                   enabled = !loading) {
                 Text(stringResource(R.string.mullvad_logout))
               }
+              Button(
+                  onClick = { model.rotateKey() },
+                  modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                  enabled = !loading) {
+                Text(stringResource(R.string.mullvad_rotate_key))
+              }
+              val rotateKeyError by model.rotateKeyError.collectAsState()
+              rotateKeyError?.let { err ->
+                Text(
+                    err,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 4.dp))
+              }
+
+              Lists.SectionDivider()
+              ListItem(
+                  headlineContent = { Text(stringResource(R.string.mullvad_hot_swap_key)) },
+                  supportingContent = {
+                    Text(stringResource(R.string.mullvad_hot_swap_key_description))
+                  },
+                  trailingContent = {
+                    Switch(
+                        checked = settings.hotSwapKey,
+                        onCheckedChange = { model.setHotSwapKey(it) },
+                        enabled = !loading,
+                    )
+                  },
+              )
 
               Lists.SectionDivider()
               ListItem(
@@ -107,16 +134,6 @@ fun MullvadSettingsView(nav: MullvadNav, model: MullvadViewModel) {
 
               Lists.SectionDivider()
               Text(
-                  stringResource(R.string.mullvad_quantum_resistance),
-                  style = MaterialTheme.typography.titleSmall,
-                  modifier = Modifier.padding(top = 8.dp))
-              Switch(
-                  checked = settings.quantumResistant,
-                  onCheckedChange = { model.setQuantum(it) },
-                  enabled = !loading && model.isImplemented("pq"),
-              )
-
-              Text(
                   stringResource(R.string.allow_lan_access),
                   style = MaterialTheme.typography.titleSmall,
                   modifier = Modifier.padding(top = 8.dp))
@@ -126,46 +143,19 @@ fun MullvadSettingsView(nav: MullvadNav, model: MullvadViewModel) {
                   enabled = !loading && model.isImplemented("allow_lan"),
               )
 
-              Text(
-                  stringResource(R.string.mullvad_obfuscation),
-                  style = MaterialTheme.typography.titleSmall,
-                  modifier = Modifier.padding(top = 8.dp))
-              val currentObfs = settings.obfuscation.ifEmpty { "auto" }
-              obfsModes.forEach { mode ->
-                ListItem(
-                    modifier = Modifier.clickable(enabled = !loading) { model.setObfuscation(mode) },
-                    headlineContent = { Text(mode) },
-                    trailingContent = {
-                      if (currentObfs == mode) {
-                        Text("✓", style = MaterialTheme.typography.bodyLarge)
-                      }
-                    },
+              if (model.isImplemented("lockdown")) {
+                Text(
+                    stringResource(R.string.mullvad_lockdown),
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(top = 8.dp))
+                Switch(
+                    checked = settings.lockdown,
+                    onCheckedChange = { model.setLockdown(it) },
+                    enabled = !loading,
                 )
               }
-
-              Lists.SectionDivider()
-              Text(
-                  stringResource(R.string.mullvad_advanced_stubbed),
-                  style = MaterialTheme.typography.titleSmall,
-                  modifier = Modifier.padding(top = 8.dp))
-              StubFeatureRow(stringResource(R.string.mullvad_daita), model.isStub("daita"))
-              StubFeatureRow(stringResource(R.string.mullvad_multihop), model.isStub("multihop"))
-              StubFeatureRow(stringResource(R.string.mullvad_lockdown), model.isStub("lockdown"))
             }
           }
     }
   }
-}
-
-@Composable
-private fun StubFeatureRow(label: String, stubbed: Boolean) {
-  ListItem(
-      headlineContent = { Text(label) },
-      supportingContent = {
-        if (stubbed) Text(stringResource(R.string.mullvad_feature_unavailable))
-      },
-      trailingContent = {
-        Switch(checked = false, onCheckedChange = {}, enabled = !stubbed)
-      },
-  )
 }

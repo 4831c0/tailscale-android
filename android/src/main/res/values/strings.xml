@@ -167,9 +167,11 @@
     <string name="mullvad_lockdown">Lockdown mode</string>
     <string name="mullvad_advanced_stubbed">Advanced (limited on Android)</string>
     <string name="servers">servers</string>
-    <string name="mullvad_quantum_resistance">Quantum-resistant tunnel</string>
     <string name="mullvad_daita">DAITA</string>
     <string name="mullvad_feature_unavailable">Not available on this device yet</string>
+    <string name="mullvad_rotate_key">Rotate key</string>
+    <string name="mullvad_hot_swap_key">Hot-swap key rotation</string>
+    <string name="mullvad_hot_swap_key_description">Rotate key while staying connected (minimizes downtime)</string>
     <string name="choose_mullvad_exit_node">Mullvad exit nodes</string>
     <string name="choose_mullvad_server">Choose Mullvad server</string>
     <string name="mullvad_exit_nodes" translatable="false">Mullvad VPN</string>

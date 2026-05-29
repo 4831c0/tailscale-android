@@ -22,12 +22,13 @@ data class MullvadStatusJson(
     val tunnelError: String = "",
     val warnings: List<String> = emptyList(),
     val activeFeatures: List<String> = emptyList(),
-    val stubbedRequested: List<String> = emptyList(),
     val location: String = "",
     val city: String = "",
     val relayHostname: String = "",
     val deviceName: String = "",
     val wgPublicKey: String = "",
+    val lockdown: Boolean = false,
+    val lockdownActive: Boolean = false,
 )
 
 @Serializable
@@ -37,14 +38,10 @@ data class MullvadSettingsJson(
     val location: String = "",
     val city: String = "",
     val relayHostname: String = "",
-    val useMultihop: Boolean = false,
-    val entryLocation: String = "",
-    val quantumResistant: Boolean = false,
-    val daita: Boolean = false,
-    val obfuscation: String = "",
     val allowLAN: Boolean = false,
     val lockdown: Boolean = false,
     val autoConnect: Boolean = false,
+    val hotSwapKey: Boolean = false,
 )
 
 @Serializable data class CapabilityJson(val feature: String, val level: Int, val label: String = "")
@@ -136,33 +133,14 @@ class MullvadViewModel : ViewModel() {
     }
   }
 
-  private val obfuscationModes =
-      listOf("auto", "off", "udp2tcp", "shadowsocks", "wireguard_port", "quic", "lwo")
-
   init {
     refresh()
     fetchRelays()
   }
 
-  fun capabilityLevel(feature: String): Int = _capabilities.value[feature] ?: 2
-
-  fun isStub(feature: String): Boolean = capabilityLevel(feature) == 1
+  fun capabilityLevel(feature: String): Int = _capabilities.value[feature] ?: 1
 
   fun isImplemented(feature: String): Boolean = capabilityLevel(feature) == 0
-
-  fun implementedObfuscationModes(): List<String> =
-      obfuscationModes.filter { mode ->
-        when (mode) {
-          "off" -> true
-          "auto" -> isImplemented("obfs_auto")
-          "udp2tcp" -> isImplemented("obfs_udp2tcp")
-          "shadowsocks" -> isImplemented("obfs_shadowsocks")
-          "wireguard_port" -> isImplemented("obfs_wg_port")
-          "quic" -> isImplemented("obfs_quic")
-          "lwo" -> isImplemented("obfs_lwo")
-          else -> false
-        }
-      }
 
   fun refresh() {
     loadCapabilities()
@@ -192,7 +170,6 @@ class MullvadViewModel : ViewModel() {
               lines += "Location: $loc"
             }
             st.warnings.forEach { lines += "Warning: $it" }
-            st.stubbedRequested.forEach { lines += "Stubbed: $it" }
             if (st.tunnelError.isNotEmpty()) lines += "Error: ${st.tunnelError}"
             _statusText.value = lines.joinToString("\n")
           }
@@ -253,16 +230,12 @@ class MullvadViewModel : ViewModel() {
     }
   }
 
-  fun setQuantum(on: Boolean) {
-    updateSettings(transform = { it.copy(quantumResistant = on) })
-  }
-
   fun setAllowLAN(on: Boolean) {
     updateSettings(transform = { it.copy(allowLAN = on) })
   }
 
-  fun setObfuscation(mode: String) {
-    updateSettings(transform = { it.copy(obfuscation = mode) })
+  fun setLockdown(on: Boolean) {
+    updateSettings(transform = { it.copy(lockdown = on) })
   }
 
   fun setLocation(countryCode: String, cityCode: String, connectIfWanted: Boolean = false) {
@@ -290,6 +263,29 @@ class MullvadViewModel : ViewModel() {
         connect()
       }
     }
+  }
+
+  private val _rotateKeyError = MutableStateFlow<String?>(null)
+  val rotateKeyError: StateFlow<String?> = _rotateKeyError
+
+  fun rotateKey(onDone: (() -> Unit)? = null) {
+    _loading.value = true
+    _rotateKeyError.value = null
+    mullvadRaw("POST", "mullvad/rotate-key", null) { result ->
+      _loading.value = false
+      result
+          .onSuccess { refresh() }
+          .onFailure { _rotateKeyError.value = it.message ?: "key rotation failed" }
+      onDone?.invoke()
+    }
+  }
+
+  fun clearRotateKeyError() {
+    _rotateKeyError.value = null
+  }
+
+  fun setHotSwapKey(on: Boolean) {
+    updateSettings(transform = { it.copy(hotSwapKey = on) })
   }
 
   private fun redactAccount(account: String): String {
